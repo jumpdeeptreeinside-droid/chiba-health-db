@@ -48,23 +48,39 @@ def get_region_stats(conn: sqlite3.Connection, region: str) -> dict:
 
 
 def get_city_stats(conn: sqlite3.Connection, region: str) -> list[dict]:
-    """市区町村別の薬局統計"""
+    """市区町村別の薬局統計（addressから市区町村名を抽出）"""
+    import re
     cur = conn.cursor()
     cur.execute("""
         SELECT
-            city_name,
-            COUNT(*) as total,
-            SUM(CASE WHEN ds_only=0 THEN 1 ELSE 0 END) as dispensing,
-            SUM(CASE WHEN zaitaku_flag=1 AND ds_only=0 THEN 1 ELSE 0 END) as zaitaku,
-            ROUND(100.0 * SUM(CASE WHEN zaitaku_flag=1 AND ds_only=0 THEN 1 ELSE 0 END)
-                  / NULLIF(SUM(CASE WHEN ds_only=0 THEN 1 ELSE 0 END), 0), 1) as zaitaku_rate
+            address,
+            ds_only,
+            zaitaku_flag
         FROM pharmacies
-        WHERE iryo_ken = ? AND ds_only = 0
-        GROUP BY city_name
-        ORDER BY dispensing DESC
+        WHERE iryo_ken = ?
     """, (region,))
-    return [{"city": r[0], "total": r[1], "dispensing": r[2],
-             "zaitaku": r[3], "zaitaku_rate": r[4]} for r in cur.fetchall()]
+    rows = cur.fetchall()
+
+    # addressから市区町村名を抽出（例：「千葉県市原市中...」→「市原市」）
+    city_map: dict[str, dict] = {}
+    for address, ds_only, zaitaku_flag in rows:
+        m = re.search(r'(?:千葉県)?(.+?[市区町村])', str(address or ""))
+        city = m.group(1) if m else "不明"
+        if city not in city_map:
+            city_map[city] = {"dispensing": 0, "zaitaku": 0}
+        if not ds_only:
+            city_map[city]["dispensing"] += 1
+            if zaitaku_flag:
+                city_map[city]["zaitaku"] += 1
+
+    result = []
+    for city, d in sorted(city_map.items(), key=lambda x: -x[1]["dispensing"]):
+        dispensing = d["dispensing"]
+        zaitaku = d["zaitaku"]
+        rate = round(100.0 * zaitaku / dispensing, 1) if dispensing else 0
+        result.append({"city": city, "dispensing": dispensing,
+                        "zaitaku": zaitaku, "zaitaku_rate": rate})
+    return result
 
 
 def get_pref_zaitaku_rate(conn: sqlite3.Connection) -> float:
