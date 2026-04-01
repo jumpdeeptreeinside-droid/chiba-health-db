@@ -112,7 +112,7 @@ jobs:
           git add article_generator/vol_state.json
           git diff --staged --quiet || git commit -m \
             "chore: vol_state.json 更新 (Vol.${{ steps.generate.outputs.vol_num }} 完了)"
-          git push
+          git push origin HEAD:master
 
       # ── 9. 失敗時ログ保存 ──────────────────────────────
       - name: ログをアップロード（失敗時のみ）

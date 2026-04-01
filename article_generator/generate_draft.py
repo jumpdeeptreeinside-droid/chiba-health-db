@@ -109,7 +109,9 @@ def search_pdf_text(conn: sqlite3.Connection, region: str, limit: int = 15) -> l
         """, (region, limit))
         return [{"filename": r[0], "page": r[1], "text": r[2][:600]} for r in cur.fetchall()]
     except Exception:
-        # FTS5テーブルが存在しない場合はフォールバック
+        pass
+    try:
+        # FTS5テーブルが存在しない場合はLIKEフォールバック
         cur.execute("""
             SELECT d.filename, p.page_num, p.text
             FROM pages p JOIN documents d ON d.id = p.doc_id
@@ -117,6 +119,8 @@ def search_pdf_text(conn: sqlite3.Connection, region: str, limit: int = 15) -> l
             LIMIT ?
         """, (f"%{region}%", limit))
         return [{"filename": r[0], "page": r[1], "text": r[2][:600]} for r in cur.fetchall()]
+    except Exception:
+        return []
 
 
 # ── プロンプト構築 ────────────────────────────────────────────
