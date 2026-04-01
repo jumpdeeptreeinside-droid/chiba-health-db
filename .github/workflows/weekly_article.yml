@@ -112,20 +112,11 @@ jobs:
             "chore: vol_state.json 更新 (Vol.${{ steps.generate.outputs.vol_num }} 完了)"
           git push
 
-      # ── 9. 失敗通知 ────────────────────────────────────
-      - name: 失敗通知メールを送信
+      # ── 9. 失敗時ログ保存 ──────────────────────────────
+      - name: ログをアップロード（失敗時のみ）
         if: failure()
-        uses: dawidd6/action-send-mail@v3
+        uses: actions/upload-artifact@v4
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.GMAIL_ADDRESS }}
-          password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "【エラー】週次記事生成 失敗 - 要確認"
-          to: jump.deep.tree.inside@gmail.com
-          from: ${{ secrets.GMAIL_ADDRESS }}
-          body: |
-            週次記事自動生成に失敗しました。
-
-            ログを確認してください:
-            https://github.com/jumpdeeptreeinside-droid/chiba-health-db/actions/runs/${{ github.run_id }}
+          name: error-log-${{ github.run_id }}
+          path: "*.log"
+          retention-days: 7
