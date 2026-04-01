@@ -1,0 +1,6 @@
+pdfs/
+__pycache__/
+*.pyc
+.env
+output/
+*.log

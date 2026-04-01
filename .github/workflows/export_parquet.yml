@@ -1,0 +1,37 @@
+name: SQLite → Parquet エクスポート
+
+on:
+  push:
+    paths:
+      - 'data/chiba_iryo.db'
+  workflow_dispatch:
+
+concurrency:
+  group: export-parquet
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - run: pip install pandas pyarrow
+
+      - name: Parquet エクスポート実行
+        run: python scripts/export_parquet.py
+
+      - name: 変更をコミット & プッシュ
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/pharmacies.parquet data/documents.parquet
+          git diff --staged --quiet || git commit -m "chore: auto-export Parquet from SQLite [skip ci]"
+          git push

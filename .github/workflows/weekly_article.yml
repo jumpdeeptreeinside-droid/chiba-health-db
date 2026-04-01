@@ -1,0 +1,131 @@
+name: 週次 記事自動生成
+
+on:
+  schedule:
+    # 毎週日曜 深夜0時 JST（= UTC 日曜 15:00）
+    # 月曜朝のブリーフィングまでに完成している
+    - cron: '0 15 * * 0'
+  workflow_dispatch:
+    inputs:
+      vol_override:
+        description: '生成するVol番号（空欄=自動）'
+        required: false
+        default: ''
+
+concurrency:
+  group: weekly-article
+  cancel-in-progress: false
+
+jobs:
+  generate-and-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. このリポジトリをチェックアウト ──────────────
+      - name: chiba-health-db をチェックアウト
+        uses: actions/checkout@v4
+
+      # ── 2. Python セットアップ ─────────────────────────
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - run: pip install anthropic pandas pyarrow
+
+      # ── 3. 記事ドラフト生成 ───────────────────────────
+      - name: 記事ドラフト生成
+        id: generate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python article_generator/generate_draft.py
+
+      # ── 4. obsidian-brain をクローン ──────────────────
+      - name: obsidian-brain をクローン
+        env:
+          OBSIDIAN_PAT: ${{ secrets.OBSIDIAN_PAT }}
+        run: |
+          git clone \
+            https://x-access-token:${OBSIDIAN_PAT}@github.com/jumpdeeptreeinside-droid/obsidian-brain.git \
+            obsidian_clone
+
+      # ── 5. ドラフトを obsidian-brain にコピー ─────────
+      - name: ドラフトを vol フォルダに配置
+        run: |
+          VOL_NUM="${{ steps.generate.outputs.vol_num }}"
+          FILENAME="${{ steps.generate.outputs.draft_filename }}"
+          DEST="obsidian_clone/CrossHealth_company/communications/vol${VOL_NUM}"
+          mkdir -p "$DEST"
+          cp "output/${FILENAME}" "$DEST/"
+          echo "コピー先: $DEST/$FILENAME"
+
+      # ── 6. todo.md に「ファクトチェック待ち」を追記 ───
+      - name: todo.md を更新
+        run: |
+          VOL_NUM="${{ steps.generate.outputs.vol_num }}"
+          REGION="${{ steps.generate.outputs.region }}"
+          TODAY=$(date '+%Y-%m-%d')
+          TODO_PATH="obsidian_clone/CrossHealth_company/secretary/todo.md"
+          python3 - <<EOF
+          import re, datetime
+          path = "$TODO_PATH"
+          content = open(path, encoding='utf-8').read()
+          new_item = (
+              "\n- [ ] **【🤖自動生成 ${TODAY}】Vol.${VOL_NUM}（${REGION}圏域）"
+              "ファクトチェック待ち → note公開**\n"
+              "  - ドラフト: \`communications/vol${VOL_NUM}/\`\n"
+          )
+          # 「## 🔴 今日・明日やること」セクションの直後に挿入
+          content = content.replace(
+              "## 🔴 今日・明日やること\n",
+              "## 🔴 今日・明日やること\n" + new_item,
+              1
+          )
+          open(path, 'w', encoding='utf-8').write(content)
+          print("todo.md 更新完了")
+          EOF
+
+      # ── 7. obsidian-brain にコミット & プッシュ ───────
+      - name: obsidian-brain にコミット
+        env:
+          OBSIDIAN_PAT: ${{ secrets.OBSIDIAN_PAT }}
+        run: |
+          VOL_NUM="${{ steps.generate.outputs.vol_num }}"
+          REGION="${{ steps.generate.outputs.region }}"
+          cd obsidian_clone
+          git config user.name  "chiba-health-db[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "CrossHealth_company/communications/vol${VOL_NUM}/"
+          git add "CrossHealth_company/secretary/todo.md"
+          git diff --staged --quiet || git commit -m \
+            "feat(spotter): Vol.${VOL_NUM} ${REGION}圏域 ドラフト自動生成 $(date '+%Y-%m-%d')"
+          git push
+
+      # ── 8. vol_state.json をコミット ──────────────────
+      - name: vol_state.json をコミット
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add article_generator/vol_state.json
+          git diff --staged --quiet || git commit -m \
+            "chore: vol_state.json 更新 (Vol.${{ steps.generate.outputs.vol_num }} 完了)"
+          git push
+
+      # ── 9. 失敗通知 ────────────────────────────────────
+      - name: 失敗通知メールを送信
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.GMAIL_ADDRESS }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "【エラー】週次記事生成 失敗 - 要確認"
+          to: jump.deep.tree.inside@gmail.com
+          from: ${{ secrets.GMAIL_ADDRESS }}
+          body: |
+            週次記事自動生成に失敗しました。
+
+            ログを確認してください:
+            https://github.com/jumpdeeptreeinside-droid/chiba-health-db/actions/runs/${{ github.run_id }}
