@@ -1,0 +1,125 @@
+name: 月次データ自動更新
+
+on:
+  schedule:
+    # 毎月5日 深夜0時 JST（= UTC 4日 15:00）
+    # 月初に公開される施設基準届出の新版を取得
+    - cron: '0 15 5 * *'
+  workflow_dispatch:
+
+concurrency:
+  group: monthly-update
+  cancel-in-progress: false
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+
+    steps:
+      # ── 1. チェックアウト ──────────────────────────────────
+      - name: chiba-health-db をチェックアウト
+        uses: actions/checkout@v4
+
+      # ── 2. Python セットアップ ─────────────────────────────
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 依存パッケージをインストール
+        run: pip install requests openpyxl
+
+      # ── 3. データ更新チェック & 実行 ──────────────────────
+      - name: データ自動更新
+        id: update
+        run: python scripts/auto_update.py
+
+      # ── 4. 施設基準届出が更新された場合のみコミット ────────
+      - name: DB と data_versions.json をコミット
+        if: steps.update.outputs.shisetsu_updated == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/chiba_iryo.db data/data_versions.json
+          git commit -m "chore: 施設基準届出 ${{ steps.update.outputs.shisetsu_version }} に自動更新"
+          git push origin HEAD:master
+
+      # ── 5. GMIS新版あり or 施設基準更新 → obsidian通知 ────
+      - name: obsidian-brain をクローン
+        if: steps.update.outputs.shisetsu_updated == 'true' || steps.update.outputs.gmis_new == 'true'
+        env:
+          OBSIDIAN_PAT: ${{ secrets.OBSIDIAN_PAT }}
+        run: |
+          git clone \
+            https://x-access-token:${OBSIDIAN_PAT}@github.com/jumpdeeptreeinside-droid/obsidian-brain.git \
+            obsidian_clone
+
+      - name: todo.md に更新通知を追記
+        if: steps.update.outputs.shisetsu_updated == 'true' || steps.update.outputs.gmis_new == 'true'
+        run: |
+          TODAY=$(date '+%Y-%m-%d')
+          TODO_PATH="obsidian_clone/CrossHealth_company/secretary/todo.md"
+          python3 - <<'PYEOF'
+          import os, datetime
+          today = os.environ.get("TODAY", datetime.date.today().isoformat())
+          shisetsu_updated = os.environ.get("SHISETSU_UPDATED", "false") == "true"
+          shisetsu_ver     = os.environ.get("SHISETSU_VER", "")
+          gmis_new         = os.environ.get("GMIS_NEW", "false") == "true"
+          gmis_new_ver     = os.environ.get("GMIS_NEW_VER", "")
+          todo_path        = os.environ.get("TODO_PATH", "")
+
+          lines = []
+          if shisetsu_updated:
+              lines.append(f"- [x] **【🤖自動更新 {today}】施設基準届出 {shisetsu_ver} → DB反映完了**\n")
+          if gmis_new:
+              lines.append(
+                  f"- [ ] **【🔔要対応 {today}】GMIS薬局機能情報 新版あり ({gmis_new_ver})**\n"
+                  f"  - 手動インポートが必要 → `scripts/update_gmis_manual.md` 参照\n"
+              )
+
+          if not lines or not todo_path:
+              print("通知なし")
+          else:
+              content = open(todo_path, encoding="utf-8").read()
+              insert = "\n" + "".join(lines)
+              content = content.replace(
+                  "## 🔴 今日・明日やること\n",
+                  "## 🔴 今日・明日やること\n" + insert,
+                  1
+              )
+              open(todo_path, "w", encoding="utf-8").write(content)
+              print("todo.md 更新完了")
+          PYEOF
+        env:
+          TODAY: ${{ env.TODAY }}
+          SHISETSU_UPDATED: ${{ steps.update.outputs.shisetsu_updated }}
+          SHISETSU_VER: ${{ steps.update.outputs.shisetsu_version }}
+          GMIS_NEW: ${{ steps.update.outputs.gmis_new }}
+          GMIS_NEW_VER: ${{ steps.update.outputs.gmis_new_version }}
+          TODO_PATH: obsidian_clone/CrossHealth_company/secretary/todo.md
+
+      - name: obsidian-brain にコミット
+        if: steps.update.outputs.shisetsu_updated == 'true' || steps.update.outputs.gmis_new == 'true'
+        env:
+          OBSIDIAN_PAT: ${{ secrets.OBSIDIAN_PAT }}
+        run: |
+          cd obsidian_clone
+          git config user.name  "chiba-health-db[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CrossHealth_company/secretary/todo.md
+          git diff --staged --quiet || git commit -m \
+            "chore: データ更新通知 $(date '+%Y-%m-%d')"
+          git push
+
+      # ── 6. data_versions.json を常にコミット（更新チェック記録）
+      - name: data_versions.json を更新
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/data_versions.json
+          git diff --staged --quiet || git commit -m \
+            "chore: data_versions.json 更新 $(date '+%Y-%m-%d')"
+          git push origin HEAD:master

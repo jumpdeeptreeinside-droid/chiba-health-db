@@ -1,0 +1,14 @@
+{
+  "shisetsu": {
+    "version": "r0803",
+    "date": "2026-03-01",
+    "source": "https://kouseikyoku.mhlw.go.jp/kantoshinetsu/shisetsu_yakkyoku_r0803.zip",
+    "note": "令和8年3月 施設基準届出受理状況"
+  },
+  "gmis": {
+    "version": "20251201",
+    "date": "2025-12-01",
+    "source": "https://www.mhlw.go.jp/content/11121000/05_pharmacy_20251201.zip",
+    "note": "厚労省オープンデータ 薬局機能情報 2025年12月1日時点"
+  }
+}
