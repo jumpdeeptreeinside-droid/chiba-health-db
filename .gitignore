@@ -4,3 +4,5 @@ __pycache__/
 .env
 output/
 *.log
+*.db.bak_*
+.DS_Store
