@@ -6,3 +6,5 @@ output/
 *.log
 *.db.bak_*
 .DS_Store
+streamlit_app/data/
+streamlit_app/.streamlit/secrets.toml
