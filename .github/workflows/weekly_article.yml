@@ -27,6 +27,8 @@ jobs:
       # ── 1. このリポジトリをチェックアウト ──────────────
       - name: chiba-health-db をチェックアウト
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       # ── 2. Python セットアップ ─────────────────────────
       - uses: actions/setup-python@v5
