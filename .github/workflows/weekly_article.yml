@@ -62,6 +62,8 @@ jobs:
           DEST="obsidian_clone/CrossHealth_company/communications/vol${VOL_NUM}"
           mkdir -p "$DEST"
           cp "output/${FILENAME}" "$DEST/"
+          # 圏域マップ（共通素材）も配置して【画像：iryo_ken_map.png】を解決
+          cp "obsidian_clone/CrossHealth_company/communications/iryo_ken_map.png" "$DEST/" 2>/dev/null || echo "map not found (skip)"
           echo "コピー先: $DEST/$FILENAME"
 
       # ── 6. todo.md に「ファクトチェック待ち」を追記 ───
