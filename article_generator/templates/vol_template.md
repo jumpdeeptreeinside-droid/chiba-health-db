@@ -17,7 +17,7 @@
 
 {{圏域の地理・人口・高齢化率など。概要版PDFまたは統計資料から。}}
 
-【画像：vol{{NUM}}_table1_profile.png】
+【画像：iryo_ken_map.png】
 
 ---
 
@@ -27,13 +27,9 @@
 
 {{外来医師偏在指標の値・全国順位。概要版 p.12参照。}}
 
-【画像：vol{{NUM}}_table2_ishi.png】
-
 ### 薬局アクセシビリティ
 
 {{CrossHealth独自データ。make_vol_assets.py --data で取得した値を貼る。}}
-
-【画像：vol{{NUM}}_table3_pharmacy.png】
 
 ---
 
@@ -50,8 +46,6 @@
 ---
 
 ## まとめ：{{NUM}}回で見えてきたこと
-
-【画像：vol{{NUM}}_table4_summary.png】
 
 {{次回予告。}}
 
