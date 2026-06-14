@@ -1,11 +1,12 @@
 {
-  "next_vol": 6,
+  "next_vol": 7,
   "completed_vols": [
     1,
     2,
     3,
     4,
-    5
+    5,
+    6
   ],
   "vol_schedule": {
     "3": {
