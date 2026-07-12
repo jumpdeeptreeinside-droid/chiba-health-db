@@ -1,5 +1,5 @@
 {
-  "next_vol": 10,
+  "next_vol": 11,
   "completed_vols": [
     1,
     2,
@@ -9,7 +9,8 @@
     6,
     7,
     8,
-    9
+    9,
+    10
   ],
   "vol_schedule": {
     "3": {
