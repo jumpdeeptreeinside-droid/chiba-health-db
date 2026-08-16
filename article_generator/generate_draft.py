@@ -177,7 +177,21 @@ def main():
     vol_num = state["next_vol"]
     schedule = state["vol_schedule"].get(str(vol_num))
     if not schedule:
-        print(f"[ERROR] Vol.{vol_num} のスケジュールが vol_state.json に未登録です")
+        # 🔴 ここに来る理由は2つあって、意味がまったく違う。読んだ人が5秒で分かるように分ける。
+        #   ①予定していた号を出し切った（＝故障ではない。次に何を出すかの編集判断が要る）
+        #   ②予定表の登録漏れ（＝設定ミス）
+        planned = sorted(int(k) for k in state["vol_schedule"])
+        done = sorted(state.get("completed_vols", []))
+        if planned and done and max(planned) < vol_num and set(planned) <= set(done):
+            print(f"[DONE] 予定していた Vol.{min(planned)}〜Vol.{max(planned)} は"
+                  f"すべて発行済みです（completed_vols={done}）。"
+                  f"Vol.{vol_num} は予定表にありません＝シリーズが完結しています。")
+            print("[NEXT] 続けるなら vol_state.json の vol_schedule に次の号を足してください。"
+                  "続けないなら .github/workflows の週次スケジュールを止めてください。"
+                  "このまま放置すると毎週この失敗が積み上がります。")
+        else:
+            print(f"[ERROR] Vol.{vol_num} のスケジュールが vol_state.json に未登録です"
+                  f"（予定表にある号: {planned} / 発行済み: {done}）")
         return
 
     region = schedule["region"]
